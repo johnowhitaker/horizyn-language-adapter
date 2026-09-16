@@ -1,0 +1,16 @@
+[project]
+name = "horizyn-language-adapter"
+version = "0.1.0"
+description = "Small text adapters for the Horizyn enzyme-reaction embedding space"
+requires-python = ">=3.11,<3.13"
+dependencies = [
+  "torch==2.6.0", "numpy==1.26.4", "transformers==4.56.2",
+  "requests>=2.32,<3", "rdkit==2026.3.5", "fastapi>=0.115,<1", "uvicorn>=0.30,<1",
+]
+[project.optional-dependencies]
+modal = ["modal>=1.0,<2"]
+teacher = ["lightning>=2.2,<3", "drfp>=0.3.6", "h5py>=3.9", "tables>=3.9", "pyyaml>=6", "scikit-learn>=1.4", "sqlalchemy>=2"]
+[tool.uv]
+package = false
+# DRFP still requests the obsolete distribution name; modern RDKit supplies it.
+override-dependencies = ["rdkit-pypi; python_version < '0'"]

@@ -1,0 +1,14 @@
+.venv/
+.env
+.env.*
+!.env.example
+__pycache__/
+*.py[cod]
+.DS_Store
+.cache/
+.ruff_cache/
+data/raw/
+data/processed/
+data/cache/
+experiments/runs/
+*.log

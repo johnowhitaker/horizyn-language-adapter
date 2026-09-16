@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <title>Horizyn · Language adapter</title>
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101e35'/%3E%3Ctext x='8' y='24' fill='white' font-size='25'%3Eh%3C/text%3E%3C/svg%3E"
+    />
+    <link rel="stylesheet" href="/style.css" />
+    <script
+      defer
+      src="https://cdn.jsdelivr.net/npm/3dmol@2.5.5/build/3Dmol-min.js"
+    ></script>
+    <script defer src="/app.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="/"
+        >horizyn <span class="brand-divider">/</span
+        ><span class="lab-name">language adapter</span></a
+      ><span id="status" class="status" role="status"
+        >Loading local model…</span
+      >
+    </header>
+    <main class="workspace">
+      <div class="eyebrow">WORDS INTO BIOCHEMISTRY</div>
+      <h1>What reaction do you have in mind?</h1>
+      <p class="intro">
+        Search reactions and possible catalysts with a description.
+      </p>
+      <form id="search" class="search-box">
+        <textarea
+          id="query"
+          aria-label="Describe a chemical reaction"
+          maxlength="3000"
+          rows="2"
+        >
+Snips fatty acid tails off a lipid</textarea
+        ><button class="search-button" id="submit" disabled>Explore →</button>
+      </form>
+      <div class="mode-row">
+        <label for="mode">Search method</label
+        ><select id="mode">
+          <option value="adapter">Learned adapter</option>
+          <option value="catalogue" disabled>Catalogue-assisted</option></select
+        ><span id="method-note"
+          >Text is projected into Horizyn's shared reaction and protein
+          space.</span
+        >
+      </div>
+      <div class="example-row">
+        <button id="dice" disabled>⚄ Roll a diagnostic example</button
+        ><span>Try</span
+        ><button data-query="Turns ornithine into putrescine">
+          Turns ornithine into putrescine ↗</button
+        ><button
+          data-query="An ATP-powered shuttle brings arginine into the cell"
+        >
+          An ATP-powered arginine shuttle ↗
+        </button>
+      </div>
+      <p id="error" class="error" role="alert" hidden></p>
+      <section
+        id="answer"
+        class="test-answer"
+        aria-live="polite"
+        hidden
+      ></section>
+      <div class="results-bar">
+        <span id="result-label">One query. Two views of the chemistry.</span
+        ><span id="timing"></span>
+      </div>
+      <div id="columns" class="result-columns" aria-busy="false">
+        <section>
+          <div class="column-heading">
+            <h2>Reactions</h2>
+            <span class="column-caption">The chemistry</span>
+          </div>
+          <div id="reactions" class="cards"></div>
+        </section>
+        <section>
+          <div class="column-heading">
+            <h2>Proteins</h2>
+            <span class="column-caption">The possible catalysts</span>
+          </div>
+          <div id="proteins" class="cards"></div>
+        </section>
+      </div>
+      <footer>
+        <span>Frozen text encoder → small adapter → Horizyn.</span
+        ><span
+          >Similarity suggests a match; it does not establish activity.</span
+        >
+      </footer>
+    </main>
+    <dialog id="comparison">
+      <button id="close-comparison" class="close" aria-label="Close comparison">
+        ×
+      </button>
+      <h2 id="compare-name">Compare descriptions</h2>
+      <p>Which description is closest to this protein in the shared space?</p>
+      <form id="compare-form">
+        <div id="compare-inputs"></div>
+        <button type="button" id="add-description">+ Add description</button
+        ><button type="submit" class="search-button">Compare</button>
+      </form>
+      <div id="compare-results" aria-live="polite"></div>
+    </dialog>
+  </body>
+</html>
