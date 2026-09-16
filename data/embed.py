@@ -46,10 +46,10 @@ class TextEncoder:
         )
 
     @torch.inference_mode()
-    def __call__(self, texts):
+    def __call__(self, texts, prefix=None):
         c = self.config
         t = self.tokenizer(
-            [c["prefix"] + s for s in texts],
+            [(c["prefix"] if prefix is None else prefix) + s for s in texts],
             padding=True,
             truncation=True,
             max_length=c["max_length"],

@@ -8,12 +8,12 @@
       rel="icon"
       href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%23101e35'/%3E%3Ctext x='8' y='24' fill='white' font-size='25'%3Eh%3C/text%3E%3C/svg%3E"
     />
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/style.css?v=swissprot-2" />
     <script
       defer
       src="https://cdn.jsdelivr.net/npm/3dmol@2.5.5/build/3Dmol-min.js"
     ></script>
-    <script defer src="/app.js"></script>
+    <script defer src="/app.js?v=swissprot-1"></script>
   </head>
   <body>
     <header class="topbar">
@@ -26,14 +26,14 @@
     </header>
     <main class="workspace">
       <div class="eyebrow">WORDS INTO BIOCHEMISTRY</div>
-      <h1>What reaction do you have in mind?</h1>
+      <h1>What function do you have in mind?</h1>
       <p class="intro">
         Search reactions and possible catalysts with a description.
       </p>
       <form id="search" class="search-box">
         <textarea
           id="query"
-          aria-label="Describe a chemical reaction"
+          aria-label="Describe a protein function or chemical reaction"
           maxlength="3000"
           rows="2"
         >
@@ -43,7 +43,8 @@ Snips fatty acid tails off a lipid</textarea
       <div class="mode-row">
         <label for="mode">Search method</label
         ><select id="mode">
-          <option value="adapter">Learned adapter</option>
+          <option value="adapter">Reaction descriptions</option>
+          <option value="protein" disabled>Protein descriptions · Swiss-Prot</option>
           <option value="catalogue" disabled>Catalogue-assisted</option></select
         ><span id="method-note"
           >Text is projected into Horizyn's shared reaction and protein

@@ -21,13 +21,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from settings import ROOT, CACHE, PROCESSED, RUNS
 from data.embed import TextEncoder
-from data.io import read_jsonl
+from data.io import read_jsonl, sha256
 from training.model import load_adapter
 
 lock = threading.RLock()
 state = {"ready": False, "stage": "Loading local model"}
 engine = None
 checkpoint = Path(os.environ.get("HLA_CHECKPOINT", RUNS / "best/adapter.pt"))
+protein_experiment = ROOT / "experiments/swissprot_poc/artifacts"
 
 
 class Engine:
@@ -72,19 +73,54 @@ class Engine:
                     )
         # Demo examples are explicit: serving the app never opens the test set automatically.
         self.examples = read_jsonl(PROCESSED / "demo_examples.jsonl")
+        self.protein_adapter = None
+        self.protein_examples = []
+        self.load_protein_adapter(rc["teacher"])
         self.encoder = TextEncoder(self.checkpoint["encoder"], offline=True)
         self.query_cache = {}
 
+    def load_protein_adapter(self, teacher):
+        protein_path = protein_experiment / "selected/adapter.pt"
+        if not protein_path.exists() or self.proteins is None:
+            return
+        adapter, checkpoint = load_adapter(protein_path)
+        # A different primary encoder can still serve the original demo.
+        if {k: v for k, v in checkpoint["encoder"].items() if k != "prefix"} != {
+            k: v for k, v in self.checkpoint["encoder"].items() if k != "prefix"
+        }:
+            return
+        assert checkpoint["target_type"] == "protein"
+        assert checkpoint["teacher"] == teacher
+        provenance = checkpoint["provenance"]["dataset"]
+        assert sha256(CACHE / "proteins.pt") == provenance["protein_library_sha256"]
+        dataset = protein_experiment / "dataset"
+        assert json.loads((dataset / "manifest.json").read_text()) == provenance
+        assert sha256(dataset / "proteins.jsonl") == provenance["proteins_sha256"]
+        for row in read_jsonl(dataset / "proteins.jsonl"):
+            self.protein_meta[row["protein_id"]] = dict(
+                name=row["name"], organism=row["organism"], ec="; ".join(row["ec"])
+            )
+            if row["split"] == "diagnostic":
+                self.protein_examples.append(dict(
+                    text=row["name"] + ". " + row["function"], protein_id=row["protein_id"]
+                ))
+        self.protein_adapter, self.protein_checkpoint = adapter, checkpoint
+
     @torch.inference_mode()
-    def encode(self, texts):
-        missing = list(dict.fromkeys(t for t in texts if t not in self.query_cache))
+    def encode(self, texts, prefix):
+        missing = list(dict.fromkeys(t for t in texts if (prefix, t) not in self.query_cache))
         for start in range(0, len(missing), 4):
             chunk = missing[start : start + 4]
-            self.query_cache.update(zip(chunk, self.encoder(chunk)))
-        return torch.stack([self.query_cache[t] for t in texts])
+            self.query_cache.update(zip(((prefix, t) for t in chunk), self.encoder(chunk, prefix=prefix)))
+        return torch.stack([self.query_cache[prefix, t] for t in texts])
 
     def representation(self, texts, mode):
-        x = self.encode(texts)
+        if mode not in {"adapter", "catalogue", "protein"}:
+            raise HTTPException(400, "Unknown search method")
+        if mode == "protein" and self.protein_adapter is None:
+            raise HTTPException(400, "Swiss-Prot adapter has not been trained yet")
+        config = self.protein_checkpoint if mode == "protein" else self.checkpoint
+        x = self.encode(texts, config["encoder"]["prefix"])
         if mode == "catalogue":
             if self.catalogue is None:
                 raise HTTPException(
@@ -103,7 +139,7 @@ class Engine:
             scores = torch.full((len(texts), len(self.reactions)), -float("inf"))
             scores[:, self.ci] = sim
         else:
-            z = self.adapter(x)
+            z = (self.protein_adapter if mode == "protein" else self.adapter)(x)
             scores = z @ self.reactions.T
         return z, scores
 
@@ -184,13 +220,22 @@ class Engine:
                 seconds=time.monotonic() - started,
             )
             if expected:
+                if expected in self.pi:
+                    ps = self.proteins @ z[0]
+                    rank = 1 + int((ps > ps[self.pi[expected]]).sum())
+                    result["expected"] = dict(kind="protein", rank=rank, exact_rank=rank,
+                        groups=len(self.pids), target=dict(id=expected,
+                            url="https://www.uniprot.org/uniprotkb/" + expected,
+                            **self.protein_meta.get(expected, {})))
+                    return result
                 if expected not in self.ri:
-                    raise HTTPException(400, "Target not in reaction library")
+                    raise HTTPException(400, "Target not in protein or reaction library")
                 i = self.ri[expected]
                 group_scores = {}
                 for g, s in zip(self.groups, scores.tolist()):
                     group_scores[g] = max(s, group_scores.get(g, -float("inf")))
                 result["expected"] = dict(
+                    kind="reaction",
                     target=self.reaction_hit(i, scores[i]),
                     rank=1
                     + sum(
@@ -228,12 +273,12 @@ def ready():
 
 class Query(BaseModel):
     text: str = Field(min_length=1, max_length=3000)
-    mode: str = Field(default="adapter", pattern="^(adapter|catalogue)$")
+    mode: str = Field(default="adapter", pattern="^(adapter|catalogue|protein)$")
     expected: str | None = None
 
 
 class Mode(BaseModel):
-    mode: str = Field(default="adapter", pattern="^(adapter|catalogue)$")
+    mode: str = Field(default="adapter", pattern="^(adapter|catalogue|protein)$")
 
 
 class Comparison(Mode):
@@ -249,25 +294,28 @@ def health():
         "proteins": len(engine.pids) if engine else 0,
         "catalogue": engine is not None and engine.catalogue is not None,
         "examples": bool(engine and engine.examples),
+        "protein_adapter": engine is not None and engine.protein_adapter is not None,
+        "protein_examples": bool(engine and engine.protein_examples),
     }
 
 
 @app.post("/api/search")
 def search(body: Query):
     if not body.text.strip():
-        raise HTTPException(422, "Enter a reaction description")
+        raise HTTPException(422, "Enter a function or reaction description")
     return ready().search(body.text.strip(), body.mode, body.expected)
 
 
 @app.post("/api/example")
 def example(body: Mode):
     e = ready()
-    if not e.examples:
+    examples = e.protein_examples if body.mode == "protein" else e.examples
+    if not examples:
         raise HTTPException(
             404, "No demo_examples.jsonl; choose diagnostic examples explicitly"
         )
-    row = random.choice(e.examples)
-    return e.search(row["text"], body.mode, row["reaction_id"])
+    row = random.choice(examples)
+    return e.search(row["text"], body.mode, row.get("protein_id", row.get("reaction_id")))
 
 
 @app.post("/api/compare")

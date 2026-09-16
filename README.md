@@ -49,6 +49,8 @@ calls are made by the demo. Qwen 4B needs roughly 10 GB of working memory.
 - Search with a description; reactions and proteins appear in two columns.
 - Roll a diagnostic example to see its source reaction and rank.
 - Switch to catalogue-assisted search to retrieve named equations directly.
+- If the [Swiss-Prot experiment](experiments/swissprot_poc/README.md) is trained,
+  choose **Protein descriptions · Swiss-Prot** to use its protein-description head.
 - Compare several descriptions against a protein, with available AlphaFold views.
 
 ```bash

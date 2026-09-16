@@ -132,6 +132,9 @@ h1 {
   color: white;
   font-weight: 600;
 }
+.result-columns.protein-first > section:last-child {
+  order: -1;
+}
 .mode-row {
   display: flex;
   align-items: center;
@@ -193,7 +196,7 @@ h1 {
 }
 .result-columns {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 28px;
   transition: opacity 0.2s;
 }
@@ -266,6 +269,7 @@ h1 {
   gap: 10px;
   color: #718095;
   font-size: 12px;
+  overflow-wrap: anywhere;
 }
 .protein-body {
   display: flex;
@@ -288,6 +292,7 @@ h1 {
   color: #748399;
   margin: 0 0 8px;
   font-style: italic;
+  overflow-wrap: anywhere;
 }
 .protein-thumbnail {
   width: 125px;
@@ -417,7 +422,7 @@ dialog textarea {
     padding: 30px 20px;
   }
   .result-columns {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
     gap: 22px;
   }
   h1 {

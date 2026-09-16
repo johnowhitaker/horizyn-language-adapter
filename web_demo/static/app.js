@@ -31,13 +31,13 @@ function setBusy(value) {
   $("columns").setAttribute("aria-busy", String(value));
   $("columns").classList.toggle("searching", value);
   $("submit").disabled = value || !isReady;
-  $("dice").disabled = value || !isReady || !hasExamples;
+  $("dice").disabled = value || !isReady || !hasExamples[$("mode").value];
   $("mode").disabled = value;
 }
-let hasExamples = false;
+let hasExamples = {};
 async function search(text = $("query").value, mode = $("mode").value) {
   if (busy) throw new Error("Wait for the current search to finish");
-  if (!text.trim()) throw new Error("Enter a reaction description");
+  if (!text.trim()) throw new Error("Enter a function or reaction description");
   const expected = result?.query === text ? result.expected?.target.id : null;
   $("query").value = text;
   $("mode").value = mode;
@@ -58,12 +58,13 @@ async function search(text = $("query").value, mode = $("mode").value) {
 }
 function render(d) {
   result = d;
+  $("columns").classList.toggle("protein-first", d.mode === "protein");
   $("query").value = d.query;
   $("result-label").textContent = "Matches for “" + d.query + "”";
   $("timing").textContent =
     d.seconds.toFixed(2) +
     "s · " +
-    (d.mode === "catalogue" ? "catalogue-assisted" : "learned adapter");
+    ({catalogue: "catalogue-assisted", protein: "Swiss-Prot adapter", adapter: "reaction adapter"}[d.mode]);
   $("reactions").innerHTML = d.reactions
     .map(
       (r, i) =>
@@ -82,8 +83,9 @@ function render(d) {
   $("answer").hidden = !d.expected;
   if (d.expected) {
     const e = d.expected;
+    const protein = e.kind === "protein";
     $("answer").innerHTML =
-      `<div class="test-answer-heading"><span>Diagnostic example</span><strong>Target rank #${e.rank.toLocaleString()} <small>/ ${e.groups.toLocaleString()} groups</small></strong></div><p>${escapeHTML(e.target.equation)}</p><a href="${escapeHTML(e.target.url)}" target="_blank" rel="noreferrer">${escapeHTML(e.target.id)}</a><div class="test-answer-note">Exact-ID rank: ${e.exact_rank.toLocaleString()}. Demo examples are separate from formal evaluation; synthetic descriptions may be imperfect.</div>`;
+      `<div class="test-answer-heading"><span>Diagnostic example</span><strong>Target rank #${e.rank.toLocaleString()} <small>/ ${e.groups.toLocaleString()} ${protein ? "proteins" : "groups"}</small></strong></div><p>${escapeHTML(protein ? e.target.name : e.target.equation)}</p><a href="${escapeHTML(e.target.url)}" target="_blank" rel="noreferrer">${escapeHTML(e.target.id)}</a><div class="test-answer-note">Exact-ID rank: ${e.exact_rank.toLocaleString()}. ${protein ? "Swiss-Prot function text, held out from adapter training. Similar proteins may share this function." : "Synthetic description; demo examples are separate from formal evaluation."}</div>`;
   }
   document
     .querySelectorAll("[data-compare]")
@@ -110,7 +112,9 @@ function updateModeNote() {
   $("method-note").textContent =
     $("mode").value === "catalogue"
       ? "Text finds named equations; their Horizyn vectors retrieve proteins."
-      : "Text is projected into Horizyn's shared reaction and protein space.";
+      : $("mode").value === "protein"
+        ? "Learned from Swiss-Prot protein descriptions; searches proteins and reactions."
+        : "Learned from reaction descriptions; searches reactions and proteins.";
 }
 $("mode").onchange = () => {
   search().catch(() => {});
@@ -220,11 +224,12 @@ async function health() {
   try {
     const d = await (await fetch("/api/health")).json();
     isReady = d.ready;
-    hasExamples = d.examples;
+    hasExamples = {adapter: d.examples, catalogue: d.examples, protein: d.protein_examples};
     $("status").textContent = d.ready
       ? `${d.reactions.toLocaleString()} reactions · ${d.proteins.toLocaleString()} proteins`
       : d.error || d.stage;
     $("mode").querySelector("[value=catalogue]").disabled = !d.catalogue;
+    $("mode").querySelector("[value=protein]").disabled = !d.protein_adapter;
     setBusy(busy);
     if (d.ready) {
       clearInterval(poll);
@@ -246,7 +251,7 @@ if (document.modelContext) {
       type: "object",
       properties: {
         text: { type: "string", minLength: 1, maxLength: 3000 },
-        mode: { type: "string", enum: ["adapter", "catalogue"] },
+        mode: { type: "string", enum: ["adapter", "catalogue", "protein"] },
       },
       required: ["text"],
       additionalProperties: false,
@@ -254,7 +259,7 @@ if (document.modelContext) {
     execute: async ({ text, mode = "adapter" }) => {
       if (typeof text !== "string" || !text.trim() || text.length > 3000)
         throw new Error("Enter 1–3000 characters");
-      if (!["adapter", "catalogue"].includes(mode))
+      if (!["adapter", "catalogue", "protein"].includes(mode))
         throw new Error("Unknown mode");
       return search(text, mode);
     },
